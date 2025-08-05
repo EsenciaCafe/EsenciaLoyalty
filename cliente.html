@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Fidelidad Esencia</title>
+  <style>
+    body { font-family: sans-serif; max-width: 400px; margin: 40px auto; }
+    input, button { margin: 5px 0; display: block; width: 100%; }
+    .hidden { display: none; }
+    #qr { margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <h2 id="titulo">Iniciar sesión</h2>
+  <div id="login-form">
+    <input type="email" id="email" placeholder="Correo" required>
+    <input type="password" id="password" placeholder="Contraseña" required>
+    <button onclick="login()">Entrar</button>
+    <button onclick="showRegister()">Registrarse</button>
+    <p id="error" style="color:red;"></p>
+  </div>
+  <div id="register-form" class="hidden">
+    <input type="text" id="nombreReg" placeholder="Nombre" required>
+    <input type="email" id="emailReg" placeholder="Correo" required>
+    <input type="password" id="passwordReg" placeholder="Contraseña" required>
+    <button onclick="register()">Crear cuenta</button>
+    <button onclick="showLogin()">Volver</button>
+    <p id="errorReg" style="color:red;"></p>
+  </div>
+  <div id="dashboard" class="hidden">
+    <h3>Hola, <span id="nombreUser"></span></h3>
+    <p>Puntos: <span id="puntos"></span></p>
+    <div id="qr"></div>
+    <button onclick="logout()">Salir</button>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- QR -->
+  <script src="https://cdn.jsdelivr.net/npm/qrious/dist/qrious.min.js"></script>
+  <script>
+    // Configura Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_knSYppsFYJkXQHroW83Txp-jWLIxAsE",
+      authDomain: "esenciacafe-44755.firebaseapp.com",
+      projectId: "esenciacafe-44755",
+      storageBucket: "esenciacafe-44755.appspot.com",
+      messagingSenderId: "1058059262944",
+      appId: "1:1058059262944:web:e3c54feef2fb357ffa6985",
+      measurementId: "G-2BM2Z4YJ43"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // UI simples
+    function showLogin() {
+      document.getElementById('login-form').classList.remove('hidden');
+      document.getElementById('register-form').classList.add('hidden');
+      document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('titulo').innerText = 'Iniciar sesión';
+    }
+    function showRegister() {
+      document.getElementById('login-form').classList.add('hidden');
+      document.getElementById('register-form').classList.remove('hidden');
+      document.getElementById('dashboard').classList.add('hidden');
+      document.getElementById('titulo').innerText = 'Registro';
+    }
+    function showDashboard(nombre, puntos, uid) {
+      document.getElementById('login-form').classList.add('hidden');
+      document.getElementById('register-form').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      document.getElementById('titulo').innerText = 'Panel de usuario';
+      document.getElementById('nombreUser').innerText = nombre;
+      document.getElementById('puntos').innerText = puntos;
+
+      // QR code
+      let qr = new QRious({element: document.createElement('canvas'), value: uid, size: 140});
+      let qrDiv = document.getElementById('qr');
+      qrDiv.innerHTML = '';
+      qrDiv.appendChild(qr.canvas);
+    }
+
+    // Login
+    function login() {
+      let email = document.getElementById('email').value;
+      let pass = document.getElementById('password').value;
+      auth.signInWithEmailAndPassword(email, pass)
+        .then(() => location.reload())
+        .catch(err => document.getElementById('error').innerText = err.message);
+    }
+    // Register
+    function register() {
+      let email = document.getElementById('emailReg').value;
+      let pass = document.getElementById('passwordReg').value;
+      let nombre = document.getElementById('nombreReg').value;
+      auth.createUserWithEmailAndPassword(email, pass).then((cred) => {
+        return db.collection('usuarios').doc(cred.user.uid).set({
+          nombre: nombre,
+          email: email,
+          puntos: 0,
+          qrId: cred.user.uid,
+          creado: new Date()
+        });
+      }).then(() => location.reload())
+        .catch(err => document.getElementById('errorReg').innerText = err.message);
+    }
+    // Logout
+    function logout() {
+      auth.signOut().then(() => location.reload());
+    }
+    // Estado auth
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        db.collection('usuarios').doc(user.uid).get().then(docu => {
+          if (docu.exists) {
+            let data = docu.data();
+            showDashboard(data.nombre, data.puntos, user.uid);
+          }
+        });
+      } else {
+        showLogin();
+      }
+    });
+  </script>
+</body>
+</html>
