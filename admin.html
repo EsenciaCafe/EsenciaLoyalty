@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Esencia - Fidelidad</title>
+  <style>
+    body { font-family: sans-serif; max-width: 420px; margin: 40px auto; }
+    input, button { margin: 6px 0; display: block; width: 100%; }
+    video { width: 100%; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h2 id="titulo">Admin Esencia</h2>
+  <div id="login-form">
+    <input type="email" id="emailA" placeholder="Correo" required>
+    <input type="password" id="passwordA" placeholder="Contraseña" required>
+    <button onclick="loginA()">Entrar</button>
+    <p id="errorA" style="color:red;"></p>
+  </div>
+  <div id="admin-panel" class="hidden">
+    <button onclick="logoutA()">Salir</button>
+    <h3>Escanea el QR del cliente</h3>
+    <video id="preview"></video>
+    <div id="result"></div>
+    <div id="user-data" class="hidden">
+      <p><b>Cliente:</b> <span id="nombreCliente"></span></p>
+      <p><b>Puntos actuales:</b> <span id="puntosCliente"></span></p>
+      <input type="number" id="cantidadPuntos" placeholder="Cantidad de puntos" />
+      <button onclick="sumarPuntos()">Sumar puntos</button>
+      <button onclick="restarPuntos()">Restar puntos</button>
+      <p id="msgPuntos" style="color:green;"></p>
+    </div>
+  </div>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- QR scanner -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_knSYppsFYJkXQHroW83Txp-jWLIxAsE",
+      authDomain: "esenciacafe-44755.firebaseapp.com",
+      projectId: "esenciacafe-44755",
+      storageBucket: "esenciacafe-44755.appspot.com",
+      messagingSenderId: "1058059262944",
+      appId: "1:1058059262944:web:e3c54feef2fb357ffa6985",
+      measurementId: "G-2BM2Z4YJ43"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let lastUID = null;
+
+    // ADMIN AUTH
+    const adminEmail = "TU-EMAIL@DOMINIO.COM"; // pon aquí el tuyo
+    function loginA() {
+      let email = document.getElementById('emailA').value;
+      let pass = document.getElementById('passwordA').value;
+      auth.signInWithEmailAndPassword(email, pass)
+        .then((cred) => {
+          if (cred.user.email !== adminEmail) {
+            document.getElementById('errorA').innerText = "No eres administrador";
+            auth.signOut();
+            return;
+          }
+          document.getElementById('login-form').classList.add('hidden');
+          document.getElementById('admin-panel').classList.remove('hidden');
+          startScanner();
+        })
+        .catch(err => document.getElementById('errorA').innerText = err.message);
+    }
+    function logoutA() {
+      auth.signOut().then(() => location.reload());
+    }
+
+    // QR SCANNER usando ZXing
+    function startScanner() {
+      const codeReader = new ZXing.BrowserQRCodeReader();
+      const video = document.getElementById('preview');
+      codeReader.decodeFromVideoDevice(undefined, video, (result, err) => {
+        if (result) {
+          if (result.text !== lastUID) {
+            lastUID = result.text;
+            loadUserData(result.text);
+          }
+        }
+      });
+    }
+    // Cargar datos del usuario por UID
+    function loadUserData(uid) {
+      db.collection('usuarios').doc(uid).get().then(docu => {
+        if (docu.exists) {
+          let data = docu.data();
+          document.getElementById('user-data').classList.remove('hidden');
+          document.getElementById('nombreCliente').innerText = data.nombre;
+          document.getElementById('puntosCliente').innerText = data.puntos;
+          document.getElementById('msgPuntos').innerText = '';
+        } else {
+          document.getElementById('user-data').classList.add('hidden');
+        }
+      });
+    }
+    // Sumar/restar puntos
+    function sumarPuntos() {
+      actualizarPuntos("sumar");
+    }
+    function restarPuntos() {
+      actualizarPuntos("restar");
+    }
+    function actualizarPuntos(op) {
+      if (!lastUID) return;
+      let cant = parseInt(document.getElementById('cantidadPuntos').value || "0");
+      if (isNaN(cant) || cant <= 0) {
+        document.getElementById('msgPuntos').innerText = "Cantidad inválida";
+        return;
+      }
+      db.collection('usuarios').doc(lastUID).get().then(docu => {
+        if (docu.exists) {
+          let data = docu.data();
+          let nuevosPuntos = op === "sumar" ? data.puntos + cant : data.puntos - cant;
+          if (nuevosPuntos < 0) nuevosPuntos = 0;
+          db.collection('usuarios').doc(lastUID).update({ puntos: nuevosPuntos }).then(() => {
+            document.getElementById('puntosCliente').innerText = nuevosPuntos;
+            document.getElementById('msgPuntos').innerText = "¡Actualizado!";
+          });
+        }
+      });
+    }
+  </script>
+</body>
+</html>
